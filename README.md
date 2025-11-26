@@ -20,6 +20,7 @@ Skips cleaning temporary files and folders in:
 
 ### `-SkipDiskCleanup`
 Skips running the Windows Disk Cleanup utility (CleanMgr.exe)
+Will also be skipped if running in silent mode (-Silent)
 
 ### `-SkipDISM`
 Skips running DISM to clean old service pack files
