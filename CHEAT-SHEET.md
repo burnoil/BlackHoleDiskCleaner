@@ -1,9 +1,9 @@
-# Clean.ps1 - One-Page Cheat Sheet
+# BlackHoleDiskCleaner.ps1.ps1 - One-Page Cheat Sheet
 
 ## THE MOST IMPORTANT COMMAND (For M365 Work)
 
 ```powershell
-.\Clean.ps1 -LocalRun -AggressiveDISM -RepairWMI
+.\BlackHoleDiskCleaner.ps1 -LocalRun -AggressiveDISM -RepairWMI
 ```
 **Run this before EVERY M365 upgrade**  
 → Reduces error 1603 by 80%  
@@ -16,28 +16,28 @@
 
 ### 1. Pre-M365 Upgrade
 ```powershell
-.\Clean.ps1 -LocalRun -AggressiveDISM -RepairWMI
+.\BlackHoleDiskCleaner.ps1 -LocalRun -AggressiveDISM -RepairWMI
 ```
 
 ### 2. Weekly Automated Cleanup
 ```powershell
-.\Clean.ps1 -LocalRun -Silent
+.\BlackHoleDiskCleaner.ps1 -LocalRun -Silent
 ```
 
 ### 3. Test First
 ```powershell
-.\Clean.ps1 -LocalRun -DryRun -EnableVerbose
+.\BlackHoleDiskCleaner.ps1 -LocalRun -DryRun -EnableVerbose
 ```
 
 ### 4. After Failed M365 Install
 ```powershell
-.\Clean.ps1 -LocalRun -AggressiveDISM -RepairWMI
+.\BlackHoleDiskCleaner.ps1 -LocalRun -AggressiveDISM -RepairWMI
 # Then retry installation
 ```
 
 ### 5. Conservative (Keep User Stuff)
 ```powershell
-.\Clean.ps1 -LocalRun -SkipRecycleBin -SkipBrowserCache
+.\BlackHoleDiskCleaner.ps1 -LocalRun -SkipRecycleBin -SkipBrowserCache
 ```
 
 ---
@@ -47,7 +47,7 @@
 ```actionscript
 action uses wow64 redirection false
 
-waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\Clean.ps1' -LocalRun -Silent -AggressiveDISM -RepairWMI"
+waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\BlackHoleDiskCleaner.ps1' -LocalRun -Silent -AggressiveDISM -RepairWMI"
 
 continue if {free space of drive of system folder / 1073741824 > 10}
 
@@ -70,7 +70,7 @@ endif
 -SkipTempFiles           # Don't clean temp files
 ```
 
-**Example**: `.\Clean.ps1 -LocalRun -SkipRecycleBin -SkipBrowserCache`
+**Example**: `.\BlackHoleDiskCleaner.ps1 -LocalRun -SkipRecycleBin -SkipBrowserCache`
 
 ---
 
@@ -99,7 +99,7 @@ endif
 ## Error 1603 Checklist
 
 - [ ] Close all Office apps
-- [ ] Run cleanup: `.\Clean.ps1 -LocalRun -AggressiveDISM -RepairWMI`
+- [ ] Run cleanup: `.\BlackHoleDiskCleaner.ps1 -LocalRun -AggressiveDISM -RepairWMI`
 - [ ] Verify 10+ GB free
 - [ ] Retry M365 install
 
@@ -132,13 +132,13 @@ endif
 ## Remember
 
 **Before M365 upgrades:**  
-`.\Clean.ps1 -LocalRun -AggressiveDISM -RepairWMI`
+`.\BlackHoleDiskCleaner.ps1 -LocalRun -AggressiveDISM -RepairWMI`
 
 **For automation:**  
-`.\Clean.ps1 -LocalRun -Silent`
+`.\BlackHoleDiskCleaner.ps1 -LocalRun -Silent`
 
 **To test:**  
-`.\Clean.ps1 -LocalRun -DryRun -EnableVerbose`
+`.\BlackHoleDiskCleaner.ps1 -LocalRun -DryRun -EnableVerbose`
 
 ---
 
