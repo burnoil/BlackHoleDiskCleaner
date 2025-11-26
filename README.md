@@ -4,7 +4,7 @@ Comprehensive Powershell Disk Cleaner
 # BlackHoleDiskCleaner.ps1 - Skip Parameters Quick Reference
 
 ## Overview
-You can now selectively disable cleanup operations using skip switches. This is useful when you want to run only specific cleanup tasks or avoid certain operations.
+You can selectively disable cleanup operations using skip switches. This is useful when you want to run only specific cleanup tasks or avoid certain operations.
 
 ## Available Skip Parameters
 
