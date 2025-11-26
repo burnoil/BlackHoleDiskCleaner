@@ -41,6 +41,25 @@
 .PARAMETER SkipRecycleBin
     Skip emptying the Recycle Bin.
 
+.PARAMETER SkipWindowsUpdate
+    Skip cleaning Windows Update cache and Delivery Optimization files.
+
+.PARAMETER SkipBrowserCache
+    Skip cleaning browser caches (Chrome, Edge, Firefox).
+
+.PARAMETER SkipSystemLogs
+    Skip cleaning old system logs (CBS, Windows Update, DISM logs).
+
+.PARAMETER AggressiveDISM
+    Use aggressive DISM cleanup with StartComponentCleanup and ResetBase for maximum space recovery.
+    Warning: This prevents uninstalling recent Windows updates. Use with caution.
+
+.PARAMETER DryRun
+    Preview mode - shows what would be cleaned without actually deleting files.
+
+.PARAMETER LogRetentionDays
+    Number of days to retain system log files. Logs older than this are deleted. Default is 30 days.
+
 .EXAMPLE
     .\Clean.ps1 -LocalRun -Silent
     Runs cleanup on local computer with no console output.
@@ -52,6 +71,18 @@
 .EXAMPLE
     .\Clean.ps1 -LocalRun -SkipRecycleBin -SkipDISM
     Runs cleanup but skips Recycle Bin and DISM operations.
+
+.EXAMPLE
+    .\Clean.ps1 -LocalRun -AggressiveDISM
+    Runs cleanup with aggressive DISM component store cleanup for maximum space recovery.
+
+.EXAMPLE
+    .\Clean.ps1 -LocalRun -DryRun
+    Preview what would be cleaned without actually deleting anything.
+
+.EXAMPLE
+    .\Clean.ps1 -LocalRun -SkipBrowserCache -SkipWindowsUpdate
+    Runs standard cleanup but skips browser and Windows Update caches.
 #>
 
 [CmdletBinding()]
@@ -76,7 +107,16 @@ Param(
     [switch]$SkipTempFiles,
     [switch]$SkipDiskCleanup,
     [switch]$SkipDISM,
-    [switch]$SkipRecycleBin
+    [switch]$SkipRecycleBin,
+    [switch]$SkipWindowsUpdate,
+    [switch]$SkipBrowserCache,
+    [switch]$SkipSystemLogs,
+
+    # Advanced options
+    [switch]$AggressiveDISM,
+    [switch]$DryRun,
+    [ValidateRange(1, 365)]
+    [int]$LogRetentionDays = 30
 )
 
 # Set verbosity based on parameters
@@ -435,11 +475,25 @@ Function Invoke-DISM {
         $ComputerOBJ
     )
 
-    Write-CleanupMessage "Running DISM to clean old service pack files" -Type Warning
+    if ($AggressiveDISM) {
+        Write-CleanupMessage "Running DISM with aggressive component store cleanup" -Type Warning
+    }
+    else {
+        Write-CleanupMessage "Running DISM to clean old service pack files" -Type Warning
+    }
 
     $ScriptBlock = {
+        param($UseAggressive)
         try {
-            $DISMResult = dism.exe /online /cleanup-Image /spsuperseded 2>&1
+            if ($UseAggressive) {
+                # More thorough cleanup - removes superseded components
+                # This can take longer but recovers more space
+                $DISMResult = dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase 2>&1
+            }
+            else {
+                # Legacy method - just service pack cleanup
+                $DISMResult = dism.exe /online /cleanup-Image /spsuperseded 2>&1
+            }
             return $DISMResult
         }
         catch {
@@ -448,17 +502,17 @@ Function Invoke-DISM {
     }
 
     if ($ComputerOBJ.PSRemoting) {
-        $DISM = Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock $ScriptBlock -Credential $ComputerOBJ.Credential
+        $DISM = Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock $ScriptBlock -ArgumentList $AggressiveDISM -Credential $ComputerOBJ.Credential
     }
     else {
-        $DISM = & $ScriptBlock
+        $DISM = & $ScriptBlock -UseAggressive $AggressiveDISM
     }
 
     if ($DISM -match 'The operation completed successfully') {
         Write-CleanupMessage "DISM completed successfully" -Type Success
     }
     else {
-        Write-CleanupMessage "Unable to clean old Service Pack files" -Type Error
+        Write-CleanupMessage "Unable to complete DISM cleanup" -Type Error
     }
 }
 
@@ -496,10 +550,272 @@ Function Repair-WMIRepository {
     }
 }
 
+Function Clear-WindowsUpdateCache {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]
+        $ComputerOBJ
+    )
+
+    Write-CleanupMessage "Cleaning Windows Update cache and delivery optimization" -Type Warning
+
+    $ScriptBlock = {
+        param($TargetDrive, $DryRun)
+        $CleanedItems = 0
+
+        # Stop Windows Update service
+        try {
+            Stop-Service -Name wuauserv -Force -ErrorAction Stop
+            $ServiceStopped = $true
+        }
+        catch {
+            $ServiceStopped = $false
+        }
+
+        if ($ServiceStopped) {
+            # Clean SoftwareDistribution Download folder
+            $SoftwareDistPath = "$TargetDrive\Windows\SoftwareDistribution\Download\*"
+            if (Test-Path $SoftwareDistPath) {
+                try {
+                    if (-not $DryRun) {
+                        Remove-Item -Path $SoftwareDistPath -Recurse -Force -ErrorAction SilentlyContinue
+                    }
+                    $CleanedItems++
+                }
+                catch {
+                    # Continue on error
+                }
+            }
+
+            # Restart Windows Update service
+            try {
+                Start-Service -Name wuauserv -ErrorAction Stop
+            }
+            catch {
+                # Service will start on next update check
+            }
+        }
+
+        # Clean Delivery Optimization cache
+        $DeliveryOptPath = "$TargetDrive\Windows\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache\*"
+        if (Test-Path $DeliveryOptPath) {
+            try {
+                if (-not $DryRun) {
+                    Remove-Item -Path $DeliveryOptPath -Recurse -Force -ErrorAction SilentlyContinue
+                }
+                $CleanedItems++
+            }
+            catch {
+                # Continue on error
+            }
+        }
+
+        return $CleanedItems
+    }
+
+    if ($ComputerOBJ.PSRemoting) {
+        $Result = Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock $ScriptBlock -ArgumentList $TargetDrive, $DryRun -Credential $ComputerOBJ.Credential
+    }
+    else {
+        $Result = & $ScriptBlock -TargetDrive $TargetDrive -DryRun $DryRun
+    }
+
+    if ($Result -gt 0) {
+        Write-CleanupMessage "Windows Update cache cleaned ($Result locations)" -Type Success
+    }
+    else {
+        Write-CleanupMessage "No Windows Update cache to clean or operation failed" -Type Info
+    }
+}
+
+Function Clear-BrowserCaches {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]
+        $ComputerOBJ
+    )
+
+    Write-CleanupMessage "Cleaning browser caches (Chrome, Edge, Firefox)" -Type Warning
+
+    $ScriptBlock = {
+        param($TargetDrive, $DryRun)
+        $CleanedItems = 0
+
+        # Chrome cache paths
+        $ChromePaths = @(
+            "$TargetDrive\Users\*\AppData\Local\Google\Chrome\User Data\Default\Cache\*",
+            "$TargetDrive\Users\*\AppData\Local\Google\Chrome\User Data\Default\Code Cache\*",
+            "$TargetDrive\Users\*\AppData\Local\Google\Chrome\User Data\Default\GPUCache\*"
+        )
+
+        # Edge cache paths
+        $EdgePaths = @(
+            "$TargetDrive\Users\*\AppData\Local\Microsoft\Edge\User Data\Default\Cache\*",
+            "$TargetDrive\Users\*\AppData\Local\Microsoft\Edge\User Data\Default\Code Cache\*",
+            "$TargetDrive\Users\*\AppData\Local\Microsoft\Edge\User Data\Default\GPUCache\*"
+        )
+
+        # Firefox cache paths
+        $FirefoxPaths = @(
+            "$TargetDrive\Users\*\AppData\Local\Mozilla\Firefox\Profiles\*.default*\cache2\*",
+            "$TargetDrive\Users\*\AppData\Local\Mozilla\Firefox\Profiles\*.default-release\cache2\*"
+        )
+
+        $AllPaths = $ChromePaths + $EdgePaths + $FirefoxPaths
+
+        foreach ($Path in $AllPaths) {
+            if (Test-Path $Path) {
+                try {
+                    $Items = Get-ChildItem -Path $Path -Recurse -ErrorAction SilentlyContinue
+                    foreach ($Item in $Items) {
+                        try {
+                            if (-not $DryRun) {
+                                Remove-Item -Path $Item.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                            }
+                        }
+                        catch {
+                            # Continue on locked files
+                        }
+                    }
+                    $CleanedItems++
+                }
+                catch {
+                    # Continue on error
+                }
+            }
+        }
+
+        return $CleanedItems
+    }
+
+    if ($ComputerOBJ.PSRemoting) {
+        $Result = Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock $ScriptBlock -ArgumentList $TargetDrive, $DryRun -Credential $ComputerOBJ.Credential
+    }
+    else {
+        $Result = & $ScriptBlock -TargetDrive $TargetDrive -DryRun $DryRun
+    }
+
+    if ($Result -gt 0) {
+        Write-CleanupMessage "Browser caches cleaned ($Result locations)" -Type Success
+    }
+    else {
+        Write-CleanupMessage "No browser caches to clean" -Type Info
+    }
+}
+
+Function Clear-SystemLogs {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]
+        $ComputerOBJ
+    )
+
+    Write-CleanupMessage "Cleaning old system logs and CBS logs" -Type Warning
+
+    $ScriptBlock = {
+        param($TargetDrive, $LogRetentionDays, $DryRun)
+        $CleanedItems = 0
+        $CutoffDate = (Get-Date).AddDays(-$LogRetentionDays)
+
+        # CBS (Component-Based Servicing) logs
+        $CBSPath = "$TargetDrive\Windows\Logs\CBS"
+        if (Test-Path $CBSPath) {
+            try {
+                $OldLogs = Get-ChildItem -Path $CBSPath -Filter "*.log" -ErrorAction SilentlyContinue | 
+                    Where-Object { $_.LastWriteTime -lt $CutoffDate -and $_.Name -ne "CBS.log" }
+                
+                foreach ($Log in $OldLogs) {
+                    try {
+                        if (-not $DryRun) {
+                            Remove-Item -Path $Log.FullName -Force -ErrorAction Stop
+                        }
+                        $CleanedItems++
+                    }
+                    catch {
+                        # Continue on error
+                    }
+                }
+            }
+            catch {
+                # Continue on error
+            }
+        }
+
+        # Windows Update logs
+        $WindowsUpdateLogs = "$TargetDrive\Windows\Logs\WindowsUpdate\*.etl"
+        if (Test-Path $WindowsUpdateLogs) {
+            try {
+                $OldLogs = Get-ChildItem -Path "$TargetDrive\Windows\Logs\WindowsUpdate" -Filter "*.etl" -ErrorAction SilentlyContinue | 
+                    Where-Object { $_.LastWriteTime -lt $CutoffDate }
+                
+                foreach ($Log in $OldLogs) {
+                    try {
+                        if (-not $DryRun) {
+                            Remove-Item -Path $Log.FullName -Force -ErrorAction Stop
+                        }
+                        $CleanedItems++
+                    }
+                    catch {
+                        # Continue on error
+                    }
+                }
+            }
+            catch {
+                # Continue on error
+            }
+        }
+
+        # DISM logs
+        $DISMPath = "$TargetDrive\Windows\Logs\DISM"
+        if (Test-Path $DISMPath) {
+            try {
+                $OldLogs = Get-ChildItem -Path $DISMPath -Filter "*.log" -ErrorAction SilentlyContinue | 
+                    Where-Object { $_.LastWriteTime -lt $CutoffDate -and $_.Name -ne "dism.log" }
+                
+                foreach ($Log in $OldLogs) {
+                    try {
+                        if (-not $DryRun) {
+                            Remove-Item -Path $Log.FullName -Force -ErrorAction Stop
+                        }
+                        $CleanedItems++
+                    }
+                    catch {
+                        # Continue on error
+                    }
+                }
+            }
+            catch {
+                # Continue on error
+            }
+        }
+
+        return $CleanedItems
+    }
+
+    if ($ComputerOBJ.PSRemoting) {
+        $Result = Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock $ScriptBlock -ArgumentList $TargetDrive, $LogRetentionDays, $DryRun -Credential $ComputerOBJ.Credential
+    }
+    else {
+        $Result = & $ScriptBlock -TargetDrive $TargetDrive -LogRetentionDays $LogRetentionDays -DryRun $DryRun
+    }
+
+    if ($Result -gt 0) {
+        Write-CleanupMessage "System logs cleaned ($Result files older than $LogRetentionDays days)" -Type Success
+    }
+    else {
+        Write-CleanupMessage "No old system logs to clean" -Type Info
+    }
+}
+
 #region Main Execution
 
 if (-not $Silent) {
     Clear-Host
+}
+
+if ($DryRun) {
+    Write-CleanupMessage "***** DRY RUN MODE - No files will be deleted *****" -Type Warning
+    Write-Host ""
 }
 
 if (-not $Silent) {
@@ -590,7 +906,7 @@ if (-not $Silent) {
 if (-not $SkipTempFiles) {
     Write-CleanupMessage "Cleaning temp directories across all user profiles" -Type Warning
 
-    # Standard cleanup paths
+    # Standard temp cleanup paths
     $CleanupPaths = @(
         "$TargetDrive\Windows\Temp\*",
         "$TargetDrive\Users\*\Documents\*tmp",
@@ -604,12 +920,49 @@ if (-not $SkipTempFiles) {
         Clear-Path -Path $Path -ComputerOBJ $ComputerOBJ
     }
 
-    Write-CleanupMessage "All temp paths have been cleaned" -Type Success
+    Write-CleanupMessage "Standard temp paths cleaned" -Type Success
     if (-not $Silent) {
         Write-Host ""
     }
 } else {
     Write-CleanupMessage "Skipping temp files cleanup (SkipTempFiles specified)" -Type Info
+    if (-not $Silent) {
+        Write-Host ""
+    }
+}
+
+# Additional cleanup operations (new)
+if (-not $SkipWindowsUpdate) {
+    Clear-WindowsUpdateCache -ComputerOBJ $ComputerOBJ
+    if (-not $Silent) {
+        Write-Host ""
+    }
+} else {
+    Write-CleanupMessage "Skipping Windows Update cache cleanup (SkipWindowsUpdate specified)" -Type Info
+    if (-not $Silent) {
+        Write-Host ""
+    }
+}
+
+if (-not $SkipBrowserCache) {
+    Clear-BrowserCaches -ComputerOBJ $ComputerOBJ
+    if (-not $Silent) {
+        Write-Host ""
+    }
+} else {
+    Write-CleanupMessage "Skipping browser cache cleanup (SkipBrowserCache specified)" -Type Info
+    if (-not $Silent) {
+        Write-Host ""
+    }
+}
+
+if (-not $SkipSystemLogs) {
+    Clear-SystemLogs -ComputerOBJ $ComputerOBJ
+    if (-not $Silent) {
+        Write-Host ""
+    }
+} else {
+    Write-CleanupMessage "Skipping system logs cleanup (SkipSystemLogs specified)" -Type Info
     if (-not $Silent) {
         Write-Host ""
     }
