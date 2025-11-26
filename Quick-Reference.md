@@ -1,59 +1,59 @@
-# Clean.ps1 - Quick Reference Card
+# BlackHoleDiskCleaner.ps1 - Quick Reference Card
 
 ## Most Common Commands
 
 ### Pre-M365 Upgrade (Prevent Error 1603) ⭐ RECOMMENDED
 ```powershell
-.\Clean.ps1 -LocalRun -AggressiveDISM -RepairWMI
+.\BlackHoleDiskCleaner.ps1 -LocalRun -AggressiveDISM -RepairWMI
 ```
 Maximum cleanup before Office installations - **80% reduction in 1603 errors**
 
 ### Standard Weekly Maintenance
 ```powershell
-.\Clean.ps1 -LocalRun -Silent
+.\BlackHoleDiskCleaner.ps1 -LocalRun -Silent
 ```
 Safe, automated, no user disruption
 
 ### Conservative Cleanup (Leave User Items Alone)
 ```powershell
-.\Clean.ps1 -LocalRun -SkipRecycleBin -SkipBrowserCache -SkipOfficeCache
+.\BlackHoleDiskCleaner.ps1 -LocalRun -SkipRecycleBin -SkipBrowserCache -SkipOfficeCache
 ```
 Cleans system files only
 
 ### Maximum Space Recovery
 ```powershell
-.\Clean.ps1 -LocalRun -AggressiveDISM -RepairWMI
+.\BlackHoleDiskCleaner.ps1 -LocalRun -AggressiveDISM -RepairWMI
 ```
 ⚠️ Use on stable systems (30+ days since major updates)
 
 ### Test Before Deploying
 ```powershell
-.\Clean.ps1 -LocalRun -DryRun -EnableVerbose
+.\BlackHoleDiskCleaner.ps1 -LocalRun -DryRun -EnableVerbose
 ```
 Preview what will be cleaned
 
 ### Silent Scheduled Task
 ```powershell
-.\Clean.ps1 -LocalRun -Silent -SkipRecycleBin -SkipDISM
+.\BlackHoleDiskCleaner.ps1 -LocalRun -Silent -SkipRecycleBin -SkipDISM
 ```
 Perfect for automation
 
 ### After Failed M365 Install
 ```powershell
-.\Clean.ps1 -LocalRun -AggressiveDISM -RepairWMI
+.\BlackHoleDiskCleaner.ps1 -LocalRun -AggressiveDISM -RepairWMI
 # Then retry M365 installation
 ```
 Cleans up failed install remnants
 
 ### Office Cache Only
 ```powershell
-.\Clean.ps1 -LocalRun -SkipTempFiles -SkipDiskCleanup -SkipDISM -SkipRecycleBin -SkipWindowsUpdate -SkipBrowserCache -SkipSystemLogs
+.\BlackHoleDiskCleaner.ps1 -LocalRun -SkipTempFiles -SkipDiskCleanup -SkipDISM -SkipRecycleBin -SkipWindowsUpdate -SkipBrowserCache -SkipSystemLogs
 ```
 Only cleans Office cache (for 1603 troubleshooting)
 
 ### Browser Performance Fix
 ```powershell
-.\Clean.ps1 -LocalRun -SkipTempFiles -SkipDiskCleanup -SkipDISM -SkipRecycleBin -SkipWindowsUpdate -SkipSystemLogs -SkipOfficeCache
+.\BlackHoleDiskCleaner.ps1 -LocalRun -SkipTempFiles -SkipDiskCleanup -SkipDISM -SkipRecycleBin -SkipWindowsUpdate -SkipSystemLogs -SkipOfficeCache
 ```
 Cleans browser caches only
 
@@ -134,7 +134,7 @@ The script now cleans Office-specific files that cause installation failures:
 action uses wow64 redirection false
 
 // Pre-flight cleanup - prevents error 1603
-waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\Clean.ps1' -LocalRun -Silent -AggressiveDISM -RepairWMI"
+waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\BlackHoleDiskCleaner.ps1' -LocalRun -Silent -AggressiveDISM -RepairWMI"
 
 // Verify space (10 GB minimum for M365)
 continue if {free space of drive of system folder / 1073741824 > 10}
@@ -148,7 +148,7 @@ endif
 ```actionscript
 action uses wow64 redirection false
 
-waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\Clean.ps1' -LocalRun -Silent -SkipRecycleBin -SkipDISM"
+waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\BlackHoleDiskCleaner.ps1' -LocalRun -Silent -SkipRecycleBin -SkipDISM"
 
 if {exit code of action = 0}
     continue if true
@@ -159,7 +159,7 @@ endif
 ```actionscript
 action uses wow64 redirection false
 
-waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\Clean.ps1' -LocalRun -Silent -AggressiveDISM -RepairWMI"
+waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\BlackHoleDiskCleaner.ps1' -LocalRun -Silent -AggressiveDISM -RepairWMI"
 
 if {exit code of action = 0}
     continue if true
@@ -229,7 +229,7 @@ Check this file for details, even in Silent mode
 ## Pre-M365 Upgrade Checklist
 
 1. ✅ Close all Office applications
-2. ✅ Run: `.\Clean.ps1 -LocalRun -AggressiveDISM -RepairWMI`
+2. ✅ Run: `.\BlackHoleDiskCleaner.ps1 -LocalRun -AggressiveDISM -RepairWMI`
 3. ✅ Verify 10+ GB free space
 4. ✅ Check ClickToRunSvc is running
 5. ✅ Review transcript log for errors
@@ -277,19 +277,19 @@ Use for scripting: `if ($LASTEXITCODE -eq 0) { ... }`
 
 | If you need to... | Run this |
 |-------------------|----------|
-| Prepare for M365 upgrade | `.\Clean.ps1 -LocalRun -AggressiveDISM -RepairWMI` |
+| Prepare for M365 upgrade | `.\BlackHoleDiskCleaner.ps1 -LocalRun -AggressiveDISM -RepairWMI` |
 | Fix error 1603 | Same as above, then retry install |
-| Weekly maintenance | `.\Clean.ps1 -LocalRun -Silent` |
-| Emergency space recovery | `.\Clean.ps1 -LocalRun -AggressiveDISM` |
-| Test before deploying | `.\Clean.ps1 -LocalRun -DryRun -EnableVerbose` |
-| Conservative cleanup | `.\Clean.ps1 -LocalRun -SkipRecycleBin -SkipBrowserCache` |
+| Weekly maintenance | `.\BlackHoleDiskCleaner.ps1 -LocalRun -Silent` |
+| Emergency space recovery | `.\BlackHoleDiskCleaner.ps1 -LocalRun -AggressiveDISM` |
+| Test before deploying | `.\BlackHoleDiskCleaner.ps1 -LocalRun -DryRun -EnableVerbose` |
+| Conservative cleanup | `.\BlackHoleDiskCleaner.ps1 -LocalRun -SkipRecycleBin -SkipBrowserCache` |
 
 ---
 
 ## Get Help
 
 ```powershell
-Get-Help .\Clean.ps1 -Full
+Get-Help .\BlackHoleDiskCleaner.ps1 -Full
 ```
 
 Or read the detailed guides:
@@ -305,7 +305,7 @@ Or read the detailed guides:
 
 **Before EVERY M365 upgrade, run:**
 ```powershell
-.\Clean.ps1 -LocalRun -AggressiveDISM -RepairWMI
+.\BlackHoleDiskCleaner.ps1 -LocalRun -AggressiveDISM -RepairWMI
 ```
 
 **This single command:**
