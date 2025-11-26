@@ -1,4 +1,4 @@
-# Clean.ps1 - Enhanced Features Guide
+# BlackHoleDiskCleaner.ps1 - Enhanced Features Guide
 
 ## New Cleanup Locations
 
@@ -98,10 +98,10 @@ dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase
 **Example:**
 ```powershell
 # Standard cleanup (safe)
-.\Clean.ps1 -LocalRun
+.\BlackHoleDiskCleaner.ps1 -LocalRun
 
 # Aggressive cleanup (maximum space recovery)
-.\Clean.ps1 -LocalRun -AggressiveDISM
+.\BlackHoleDiskCleaner.ps1 -LocalRun -AggressiveDISM
 ```
 
 ### 2. Dry Run Mode (`-DryRun`)
@@ -120,10 +120,10 @@ dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase
 **Example:**
 ```powershell
 # Preview cleanup without deleting
-.\Clean.ps1 -LocalRun -DryRun
+.\BlackHoleDiskCleaner.ps1 -LocalRun -DryRun
 
 # Preview with all operations
-.\Clean.ps1 -LocalRun -DryRun -AggressiveDISM
+.\BlackHoleDiskCleaner.ps1 -LocalRun -DryRun -AggressiveDISM
 ```
 
 ### 3. Log Retention Control (`-LogRetentionDays`)
@@ -135,13 +135,13 @@ dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase
 **Examples:**
 ```powershell
 # Keep only 7 days of logs (aggressive)
-.\Clean.ps1 -LocalRun -LogRetentionDays 7
+.\BlackHoleDiskCleaner.ps1 -LocalRun -LogRetentionDays 7
 
 # Keep 90 days of logs (conservative)
-.\Clean.ps1 -LocalRun -LogRetentionDays 90
+.\BlackHoleDiskCleaner.ps1 -LocalRun -LogRetentionDays 90
 
 # Keep 1 year of logs (very conservative)
-.\Clean.ps1 -LocalRun -LogRetentionDays 365
+.\BlackHoleDiskCleaner.ps1 -LocalRun -LogRetentionDays 365
 ```
 
 ## Recommended Usage Scenarios
@@ -149,42 +149,42 @@ dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase
 ### Scenario 1: Conservative Weekly Maintenance
 **Goal**: Safe, routine cleanup without disrupting users
 ```powershell
-.\Clean.ps1 -LocalRun -Silent -SkipRecycleBin -SkipDISM -SkipBrowserCache
+.\BlackHoleDiskCleaner.ps1 -LocalRun -Silent -SkipRecycleBin -SkipDISM -SkipBrowserCache
 ```
 **What it does**: Only cleans temp files, Windows Update cache, and old logs
 
 ### Scenario 2: Aggressive Space Recovery
 **Goal**: Maximum disk space recovery on stable systems
 ```powershell
-.\Clean.ps1 -LocalRun -AggressiveDISM -RepairWMI
+.\BlackHoleDiskCleaner.ps1 -LocalRun -AggressiveDISM -RepairWMI
 ```
 **What it does**: All cleanup operations including aggressive DISM
 
 ### Scenario 3: User-Friendly Cleanup
 **Goal**: Clean system files but leave user-visible items alone
 ```powershell
-.\Clean.ps1 -LocalRun -SkipRecycleBin -SkipBrowserCache
+.\BlackHoleDiskCleaner.ps1 -LocalRun -SkipRecycleBin -SkipBrowserCache
 ```
 **What it does**: System cleanup without touching Recycle Bin or browser caches
 
 ### Scenario 4: Pre-Deployment Test
 **Goal**: Verify what will be cleaned before deploying to 1000+ machines
 ```powershell
-.\Clean.ps1 -LocalRun -DryRun -EnableVerbose
+.\BlackHoleDiskCleaner.ps1 -LocalRun -DryRun -EnableVerbose
 ```
 **What it does**: Shows everything that would be cleaned with full details
 
 ### Scenario 5: Browser Performance Reset
 **Goal**: Clear browser caches across all users
 ```powershell
-.\Clean.ps1 -LocalRun -SkipTempFiles -SkipDiskCleanup -SkipDISM -SkipRecycleBin -SkipWindowsUpdate -SkipSystemLogs
+.\BlackHoleDiskCleaner.ps1 -LocalRun -SkipTempFiles -SkipDiskCleanup -SkipDISM -SkipRecycleBin -SkipWindowsUpdate -SkipSystemLogs
 ```
 **What it does**: Only cleans browser caches
 
 ### Scenario 6: Update Troubleshooting Cleanup
 **Goal**: Clean update-related files to resolve update issues
 ```powershell
-.\Clean.ps1 -LocalRun -SkipTempFiles -SkipRecycleBin -SkipBrowserCache -SkipSystemLogs
+.\BlackHoleDiskCleaner.ps1 -LocalRun -SkipTempFiles -SkipRecycleBin -SkipBrowserCache -SkipSystemLogs
 ```
 **What it does**: Only Windows Update cache and DISM
 
@@ -226,22 +226,22 @@ dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase
 
 ### Conservative Automated Cleanup (Recommended)
 ```
-waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\Clean.ps1' -LocalRun -Silent -SkipRecycleBin -SkipDISM"
+waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\BlackHoleDiskCleaner.ps1' -LocalRun -Silent -SkipRecycleBin -SkipDISM"
 ```
 
 ### Aggressive Disk Space Recovery
 ```
-waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\Clean.ps1' -LocalRun -Silent -AggressiveDISM -RepairWMI"
+waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\BlackHoleDiskCleaner.ps1' -LocalRun -Silent -AggressiveDISM -RepairWMI"
 ```
 
 ### Targeted Browser Cache Cleanup
 ```
-waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\Clean.ps1' -LocalRun -Silent -SkipTempFiles -SkipDiskCleanup -SkipDISM -SkipRecycleBin -SkipWindowsUpdate -SkipSystemLogs"
+waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\BlackHoleDiskCleaner.ps1' -LocalRun -Silent -SkipTempFiles -SkipDiskCleanup -SkipDISM -SkipRecycleBin -SkipWindowsUpdate -SkipSystemLogs"
 ```
 
 ### Full Cleanup with All Options
 ```
-waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\Clean.ps1' -LocalRun -Silent -AggressiveDISM -RepairWMI"
+waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\BlackHoleDiskCleaner.ps1' -LocalRun -Silent -AggressiveDISM -RepairWMI"
 ```
 
 ## Performance Considerations
