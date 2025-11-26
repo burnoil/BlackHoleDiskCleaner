@@ -50,6 +50,9 @@
 .PARAMETER SkipSystemLogs
     Skip cleaning old system logs (CBS, Windows Update, DISM logs).
 
+.PARAMETER SkipOfficeCache
+    Skip cleaning Office cache and temporary files. Office cache cleanup helps prevent error 1603 during M365 upgrades.
+
 .PARAMETER AggressiveDISM
     Use aggressive DISM cleanup with StartComponentCleanup and ResetBase for maximum space recovery.
     Warning: This prevents uninstalling recent Windows updates. Use with caution.
@@ -83,6 +86,14 @@
 .EXAMPLE
     .\Clean.ps1 -LocalRun -SkipBrowserCache -SkipWindowsUpdate
     Runs standard cleanup but skips browser and Windows Update caches.
+
+.EXAMPLE
+    .\Clean.ps1 -LocalRun -AggressiveDISM -RepairWMI
+    Pre-M365 upgrade cleanup: maximum space recovery plus WMI repair to prevent 1603 errors.
+
+.EXAMPLE
+    .\Clean.ps1 -LocalRun -Silent -SkipRecycleBin -SkipBrowserCache -SkipOfficeCache
+    Conservative automated cleanup that leaves user-visible items untouched.
 #>
 
 [CmdletBinding()]
@@ -111,6 +122,7 @@ Param(
     [switch]$SkipWindowsUpdate,
     [switch]$SkipBrowserCache,
     [switch]$SkipSystemLogs,
+    [switch]$SkipOfficeCache,
 
     # Advanced options
     [switch]$AggressiveDISM,
@@ -807,6 +819,229 @@ Function Clear-SystemLogs {
     }
 }
 
+Function Clear-OfficeCache {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]
+        $ComputerOBJ
+    )
+
+    Write-CleanupMessage "Cleaning Office cache and temporary files (helps prevent 1603 errors)" -Type Warning
+
+    $ScriptBlock = {
+        param($TargetDrive, $DryRun)
+        $CleanedItems = 0
+        $ServiceStopped = $false
+
+        # Stop Office Click-to-Run service to release file locks
+        try {
+            $C2RService = Get-Service -Name "ClickToRunSvc" -ErrorAction Stop
+            if ($C2RService.Status -eq 'Running') {
+                if (-not $DryRun) {
+                    Stop-Service -Name "ClickToRunSvc" -Force -ErrorAction Stop
+                    Start-Sleep -Seconds 2
+                }
+                $ServiceStopped = $true
+            }
+        }
+        catch {
+            # Service might not exist or already stopped
+        }
+
+        # Clean Windows Installer temp files (MSI/MSP)
+        $InstallerPaths = @(
+            "$env:TEMP\*.msi",
+            "$env:TEMP\*.msp",
+            "$env:TEMP\*.mst",
+            "$env:WINDIR\Temp\*.msi",
+            "$env:WINDIR\Temp\*.msp",
+            "$env:WINDIR\Temp\*.mst"
+        )
+
+        foreach ($Pattern in $InstallerPaths) {
+            try {
+                $Files = Get-ChildItem -Path $Pattern -ErrorAction SilentlyContinue
+                foreach ($File in $Files) {
+                    try {
+                        if (-not $DryRun) {
+                            Remove-Item -Path $File.FullName -Force -ErrorAction Stop
+                        }
+                        $CleanedItems++
+                    }
+                    catch {
+                        # Continue on locked files
+                    }
+                }
+            }
+            catch {
+                # Continue on error
+            }
+        }
+
+        # Clean Office local cache folders
+        $OfficeCachePaths = @(
+            "$env:LOCALAPPDATA\Microsoft\Office\16.0\OfficeFileCache\*",
+            "$TargetDrive\Users\*\AppData\Local\Microsoft\Office\16.0\OfficeFileCache\*",
+            "$env:LOCALAPPDATA\Microsoft\Office\OTele\*",
+            "$TargetDrive\Users\*\AppData\Local\Microsoft\Office\OTele\*"
+        )
+
+        foreach ($Path in $OfficeCachePaths) {
+            if (Test-Path $Path) {
+                try {
+                    $Items = Get-ChildItem -Path $Path -Recurse -ErrorAction SilentlyContinue
+                    foreach ($Item in $Items) {
+                        try {
+                            if (-not $DryRun) {
+                                Remove-Item -Path $Item.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                            }
+                        }
+                        catch {
+                            # Continue on locked files
+                        }
+                    }
+                    $CleanedItems++
+                }
+                catch {
+                    # Continue on error
+                }
+            }
+        }
+
+        # Clean MSOCache (Microsoft Office installation cache)
+        $MSOCachePath = "$TargetDrive\MSOCache\All Users"
+        if (Test-Path $MSOCachePath) {
+            try {
+                $Items = Get-ChildItem -Path $MSOCachePath -Recurse -ErrorAction SilentlyContinue
+                foreach ($Item in $Items) {
+                    try {
+                        if (-not $DryRun) {
+                            Remove-Item -Path $Item.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                        }
+                    }
+                    catch {
+                        # Continue on locked files
+                    }
+                }
+                $CleanedItems++
+            }
+            catch {
+                # Continue on error
+            }
+        }
+
+        # Clean Office Click-to-Run package cache
+        $C2RCachePaths = @(
+            "$TargetDrive\Program Files\Microsoft Office\root\Office16\PROOF\*.*",
+            "$TargetDrive\Program Files (x86)\Microsoft Office\root\Office16\PROOF\*.*"
+        )
+
+        # Don't delete PROOF folders, but can clean temp files in them
+        # This is intentionally conservative
+
+        # Clean Office CDN cache
+        $CDNCachePath = "$env:LOCALAPPDATA\Microsoft\Office\16.0\OfficeContentCache\*"
+        if (Test-Path $CDNCachePath) {
+            try {
+                $Items = Get-ChildItem -Path $CDNCachePath -Recurse -ErrorAction SilentlyContinue
+                foreach ($Item in $Items) {
+                    try {
+                        if (-not $DryRun) {
+                            Remove-Item -Path $Item.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                        }
+                    }
+                    catch {
+                        # Continue on locked files
+                    }
+                }
+                $CleanedItems++
+            }
+            catch {
+                # Continue on error
+            }
+        }
+
+        # Clean failed Office installation temp folders
+        $FailedInstallPaths = @(
+            "$env:TEMP\OfficeClickToRun*",
+            "$TargetDrive\Windows\Temp\OfficeClickToRun*",
+            "$env:TEMP\{*}",
+            "$TargetDrive\Windows\Temp\{*}"
+        )
+
+        foreach ($Pattern in $FailedInstallPaths) {
+            try {
+                $Folders = Get-ChildItem -Path $Pattern -Directory -ErrorAction SilentlyContinue
+                foreach ($Folder in $Folders) {
+                    # Only remove if it looks like Office installer temp (contains Office or GUID)
+                    if ($Folder.Name -match "Office|^\{[A-F0-9-]+\}$") {
+                        try {
+                            if (-not $DryRun) {
+                                Remove-Item -Path $Folder.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                            }
+                            $CleanedItems++
+                        }
+                        catch {
+                            # Continue on locked folders
+                        }
+                    }
+                }
+            }
+            catch {
+                # Continue on error
+            }
+        }
+
+        # Clean Office Update cache
+        $UpdateCachePath = "$TargetDrive\Program Files\Common Files\Microsoft Shared\ClickToRun\Update\Download\*"
+        if (Test-Path $UpdateCachePath) {
+            try {
+                $Items = Get-ChildItem -Path "$TargetDrive\Program Files\Common Files\Microsoft Shared\ClickToRun\Update\Download" -ErrorAction SilentlyContinue
+                foreach ($Item in $Items) {
+                    try {
+                        if (-not $DryRun) {
+                            Remove-Item -Path $Item.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                        }
+                    }
+                    catch {
+                        # Continue on locked files
+                    }
+                }
+                $CleanedItems++
+            }
+            catch {
+                # Continue on error
+            }
+        }
+
+        # Restart Click-to-Run service if we stopped it
+        if ($ServiceStopped -and -not $DryRun) {
+            try {
+                Start-Service -Name "ClickToRunSvc" -ErrorAction Stop
+            }
+            catch {
+                # Service will start on demand
+            }
+        }
+
+        return $CleanedItems
+    }
+
+    if ($ComputerOBJ.PSRemoting) {
+        $Result = Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock $ScriptBlock -ArgumentList $TargetDrive, $DryRun -Credential $ComputerOBJ.Credential
+    }
+    else {
+        $Result = & $ScriptBlock -TargetDrive $TargetDrive -DryRun $DryRun
+    }
+
+    if ($Result -gt 0) {
+        Write-CleanupMessage "Office cache cleaned ($Result locations) - helps prevent 1603 errors" -Type Success
+    }
+    else {
+        Write-CleanupMessage "No Office cache to clean or Office not installed" -Type Info
+    }
+}
+
 #region Main Execution
 
 if (-not $Silent) {
@@ -963,6 +1198,18 @@ if (-not $SkipSystemLogs) {
     }
 } else {
     Write-CleanupMessage "Skipping system logs cleanup (SkipSystemLogs specified)" -Type Info
+    if (-not $Silent) {
+        Write-Host ""
+    }
+}
+
+if (-not $SkipOfficeCache) {
+    Clear-OfficeCache -ComputerOBJ $ComputerOBJ
+    if (-not $Silent) {
+        Write-Host ""
+    }
+} else {
+    Write-CleanupMessage "Skipping Office cache cleanup (SkipOfficeCache specified)" -Type Info
     if (-not $Silent) {
         Write-Host ""
     }
