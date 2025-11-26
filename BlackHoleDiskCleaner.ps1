@@ -456,10 +456,17 @@ Function Invoke-DiskCleanup {
         $ComputerOBJ
     )
 
+    # Skip CleanMgr entirely in Silent mode - it cannot be truly hidden
+    # The script's manual cleanup operations are more comprehensive anyway
+    if ($Silent) {
+        Write-CleanupMessage "Skipping Disk Cleanup utility in Silent mode (manual cleanup is more comprehensive)" -Type Info
+        return
+    }
+
     Write-CleanupMessage "Configuring Disk Cleanup utility" -Type Warning
 
     $ScriptBlock = {
-        param($Locations, $SageSet, $Base, $Silent)
+        param($Locations, $SageSet, $Base)
 
         # Set registry keys for cleanup locations
         foreach ($Location in $Locations) {
@@ -474,30 +481,10 @@ Function Invoke-DiskCleanup {
             }
         }
 
-        # Run CleanMgr with proper output suppression
+        # Run CleanMgr with progress window (normal mode only)
         try {
-            if ($Silent) {
-                # Use /VERYLOWDISK for completely automated cleanup without UI
-                # This is more reliable than trying to hide the window
-                $ProcessInfo = New-Object System.Diagnostics.ProcessStartInfo
-                $ProcessInfo.FileName = "CleanMgr.exe"
-                $ProcessInfo.Arguments = "/VERYLOWDISK"
-                $ProcessInfo.CreateNoWindow = $true
-                $ProcessInfo.UseShellExecute = $false
-                $ProcessInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
-                
-                $Process = New-Object System.Diagnostics.Process
-                $Process.StartInfo = $ProcessInfo
-                $null = $Process.Start()
-                $Process.WaitForExit()
-                
-                return ($Process.ExitCode -eq 0 -or $Process.ExitCode -eq $null)
-            }
-            else {
-                # Normal mode with window - use sagerun which shows progress
-                Start-Process -FilePath CleanMgr.exe -ArgumentList "/sagerun:99" -Wait -ErrorAction Stop
-                return $true
-            }
+            Start-Process -FilePath CleanMgr.exe -ArgumentList "/sagerun:99" -Wait -ErrorAction Stop
+            return $true
         }
         catch {
             return $false
@@ -505,10 +492,10 @@ Function Invoke-DiskCleanup {
     }
 
     if ($ComputerOBJ.PSRemoting) {
-        $Result = Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock $ScriptBlock -ArgumentList $CleanupLocations, $SageSet, $Base, $Silent -Credential $ComputerOBJ.Credential
+        $Result = Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock $ScriptBlock -ArgumentList $CleanupLocations, $SageSet, $Base -Credential $ComputerOBJ.Credential
     }
     else {
-        $Result = & $ScriptBlock -Locations $CleanupLocations -SageSet $SageSet -Base $Base -Silent $Silent
+        $Result = & $ScriptBlock -Locations $CleanupLocations -SageSet $SageSet -Base $Base
     }
 
     if ($Result) {
