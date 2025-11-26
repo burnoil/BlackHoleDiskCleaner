@@ -63,7 +63,7 @@ This prevents "file in use" errors and ensures clean removal.
 ### Step 1: Disk Space Recovery (Critical for 1603)
 ```powershell
 # Maximum space recovery
-.\Clean.ps1 -LocalRun -AggressiveDISM -RepairWMI
+.\BlackHoleDiskCleaner.ps1 -LocalRun -AggressiveDISM -RepairWMI
 ```
 
 **What this does**:
@@ -104,7 +104,7 @@ Now proceed with your M365 upgrade/installation.
 
 **Solution**:
 ```powershell
-.\Clean.ps1 -LocalRun -AggressiveDISM
+.\BlackHoleDiskCleaner.ps1 -LocalRun -AggressiveDISM
 ```
 This is the #1 cause of 1603 errors.
 
@@ -114,7 +114,7 @@ This is the #1 cause of 1603 errors.
 **Solution**:
 ```powershell
 # Focus on Office-specific cleanup
-.\Clean.ps1 -LocalRun -SkipBrowserCache -SkipRecycleBin
+.\BlackHoleDiskCleaner.ps1 -LocalRun -SkipBrowserCache -SkipRecycleBin
 ```
 
 ### Scenario 3: Failed Previous Installation
@@ -123,7 +123,7 @@ This is the #1 cause of 1603 errors.
 **Solution**:
 ```powershell
 # Full cleanup including all temp and Office cache
-.\Clean.ps1 -LocalRun
+.\BlackHoleDiskCleaner.ps1 -LocalRun
 ```
 
 ### Scenario 4: Service Issues
@@ -131,7 +131,7 @@ This is the #1 cause of 1603 errors.
 
 **Solution**:
 ```powershell
-.\Clean.ps1 -LocalRun -RepairWMI
+.\BlackHoleDiskCleaner.ps1 -LocalRun -RepairWMI
 
 # Also manually restart the service
 Restart-Service ClickToRunSvc -Force
@@ -146,7 +146,7 @@ Run this BEFORE M365 installation action:
 action uses wow64 redirection false
 
 // Pre-flight cleanup for M365 upgrade
-waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\Clean.ps1' -LocalRun -Silent -AggressiveDISM -RepairWMI"
+waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\BlackHoleDiskCleaner.ps1' -LocalRun -Silent -AggressiveDISM -RepairWMI"
 
 // Verify sufficient free space (10 GB minimum)
 continue if {free space of drive of system folder / 1073741824 > 10}
@@ -159,11 +159,11 @@ continue if {exists service "ClickToRunSvc"}
 
 **Action 1: Pre-Flight Cleanup**
 ```actionscript
-prefetch Clean.ps1 sha1:... size:... url:...
+prefetch BlackHoleDiskCleaner.ps1 sha1:... size:... url:...
 
-copy __Download\Clean.ps1 "C:\temp\Clean.ps1"
+copy __Download\BlackHoleDiskCleaner.ps1 "C:\temp\BlackHoleDiskCleaner.ps1"
 
-waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\Clean.ps1' -LocalRun -Silent -AggressiveDISM -RepairWMI"
+waithidden PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\temp\BlackHoleDiskCleaner.ps1' -LocalRun -Silent -AggressiveDISM -RepairWMI"
 
 action requires restart
 ```
@@ -179,7 +179,7 @@ action requires restart
 If you want to clean ONLY Office-related items:
 
 ```powershell
-.\Clean.ps1 -LocalRun -SkipTempFiles -SkipDiskCleanup -SkipDISM -SkipRecycleBin -SkipWindowsUpdate -SkipBrowserCache -SkipSystemLogs
+.\BlackHoleDiskCleaner.ps1 -LocalRun -SkipTempFiles -SkipDiskCleanup -SkipDISM -SkipRecycleBin -SkipWindowsUpdate -SkipBrowserCache -SkipSystemLogs
 ```
 
 This runs only the Office cache cleanup operation.
@@ -231,13 +231,13 @@ Prevent 1603 errors before they happen with regular cleanup:
 ### Weekly Maintenance (Non-Disruptive)
 ```powershell
 # Scheduled task: Every Sunday at 2 AM
-.\Clean.ps1 -LocalRun -Silent -SkipRecycleBin -SkipDISM
+.\BlackHoleDiskCleaner.ps1 -LocalRun -Silent -SkipRecycleBin -SkipDISM
 ```
 
 ### Monthly Deep Clean
 ```powershell
 # Scheduled task: First Sunday of month at 2 AM
-.\Clean.ps1 -LocalRun -Silent -AggressiveDISM
+.\BlackHoleDiskCleaner.ps1 -LocalRun -Silent -AggressiveDISM
 ```
 
 ## Real-World Results
@@ -258,7 +258,7 @@ Based on testing at enterprise scale:
 ### Using with ODT Configuration
 ```powershell
 # 1. Run cleanup first
-.\Clean.ps1 -LocalRun -Silent -AggressiveDISM -RepairWMI
+.\BlackHoleDiskCleaner.ps1 -LocalRun -Silent -AggressiveDISM -RepairWMI
 
 # 2. Then run ODT
 .\setup.exe /configure configuration.xml
@@ -267,7 +267,7 @@ Based on testing at enterprise scale:
 ### Using with PSADT
 ```powershell
 # In Pre-Installation section of Deploy-Application.ps1
-Execute-Process -Path "PowerShell.exe" -Parameters "-NoProfile -ExecutionPolicy Bypass -File `"$dirSupportFiles\Clean.ps1`" -LocalRun -Silent -AggressiveDISM"
+Execute-Process -Path "PowerShell.exe" -Parameters "-NoProfile -ExecutionPolicy Bypass -File `"$dirSupportFiles\BlackHoleDiskCleaner.ps1`" -LocalRun -Silent -AggressiveDISM"
 ```
 
 ## Success Verification
@@ -333,22 +333,22 @@ Write-Host "Temp folder size: $([Math]::Round($TempSize, 2)) MB"
 
 ### Before M365 Upgrade (Recommended)
 ```powershell
-.\Clean.ps1 -LocalRun -AggressiveDISM -RepairWMI
+.\BlackHoleDiskCleaner.ps1 -LocalRun -AggressiveDISM -RepairWMI
 ```
 
 ### Conservative Office-Focused Cleanup
 ```powershell
-.\Clean.ps1 -LocalRun -SkipDISM -SkipRecycleBin -SkipBrowserCache
+.\BlackHoleDiskCleaner.ps1 -LocalRun -SkipDISM -SkipRecycleBin -SkipBrowserCache
 ```
 
 ### Automated/Silent Pre-Flight
 ```powershell
-.\Clean.ps1 -LocalRun -Silent -AggressiveDISM -RepairWMI
+.\BlackHoleDiskCleaner.ps1 -LocalRun -Silent -AggressiveDISM -RepairWMI
 ```
 
 ### Test Run First
 ```powershell
-.\Clean.ps1 -LocalRun -DryRun -EnableVerbose
+.\BlackHoleDiskCleaner.ps1 -LocalRun -DryRun -EnableVerbose
 ```
 
 ## Support
