@@ -142,6 +142,7 @@ if ($Silent) {
     $WarningPreference = 'SilentlyContinue'
     $InformationPreference = 'SilentlyContinue'
     $ProgressPreference = 'SilentlyContinue'
+    $ConfirmPreference = 'None'
 }
 
 # Output function that respects Silent mode
@@ -351,8 +352,8 @@ Function Clear-Path {
                 foreach ($Item in $SortedItems) {
                     try {
                         if (Test-Path $Item.FullName) {
-                            # Use Remove-Item with Force to handle read-only/hidden/system attributes
-                            Remove-Item -Path $Item.FullName -Confirm:$false -Recurse -Force -ErrorAction Stop
+                            # Remove with all flags to prevent prompts
+                            Remove-Item -LiteralPath $Item.FullName -Recurse -Force -Confirm:$false -ErrorAction Stop
                         }
                     }
                     catch {
@@ -374,7 +375,7 @@ Function Clear-Path {
                             foreach ($SubItem in $SubItems) {
                                 try {
                                     if (Test-Path $SubItem.FullName) {
-                                        Remove-Item -Path $SubItem.FullName -Confirm:$false -Recurse -Force -ErrorAction Stop
+                                        Remove-Item -LiteralPath $SubItem.FullName -Recurse -Force -Confirm:$false -ErrorAction Stop
                                     }
                                 }
                                 catch {
@@ -385,7 +386,7 @@ Function Clear-Path {
                             }
                             # Try to remove the empty subdirectory
                             if (Test-Path $Subdir.FullName) {
-                                Remove-Item -Path $Subdir.FullName -Force -ErrorAction SilentlyContinue
+                                Remove-Item -LiteralPath $Subdir.FullName -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue
                             }
                         }
                         catch {
@@ -476,26 +477,25 @@ Function Invoke-DiskCleanup {
         # Run CleanMgr with proper output suppression
         try {
             if ($Silent) {
-                # Run completely hidden with no window
+                # Use /VERYLOWDISK for completely automated cleanup without UI
+                # This is more reliable than trying to hide the window
                 $ProcessInfo = New-Object System.Diagnostics.ProcessStartInfo
                 $ProcessInfo.FileName = "CleanMgr.exe"
-                $ProcessInfo.Arguments = "/sagerun:99"
+                $ProcessInfo.Arguments = "/VERYLOWDISK"
                 $ProcessInfo.CreateNoWindow = $true
                 $ProcessInfo.UseShellExecute = $false
-                $ProcessInfo.RedirectStandardOutput = $true
-                $ProcessInfo.RedirectStandardError = $true
                 $ProcessInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
                 
                 $Process = New-Object System.Diagnostics.Process
                 $Process.StartInfo = $ProcessInfo
-                $Process.Start() | Out-Null
+                $null = $Process.Start()
                 $Process.WaitForExit()
                 
-                return ($Process.ExitCode -eq 0)
+                return ($Process.ExitCode -eq 0 -or $Process.ExitCode -eq $null)
             }
             else {
-                # Normal mode with window
-                Start-Process -FilePath CleanMgr.exe -ArgumentList "/sagerun:99" -Wait -NoNewWindow -ErrorAction Stop
+                # Normal mode with window - use sagerun which shows progress
+                Start-Process -FilePath CleanMgr.exe -ArgumentList "/sagerun:99" -Wait -ErrorAction Stop
                 return $true
             }
         }
