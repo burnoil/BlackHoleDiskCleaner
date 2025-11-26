@@ -336,27 +336,79 @@ Function Clear-Path {
     Write-Verbose "Cleaning $Path"
 
     $ScriptBlock = {
-        param($TargetPath)
+        param($TargetPath, $EnableVerbose)
 
         if (Test-Path $TargetPath) {
-            $Items = Get-ChildItem -Path $TargetPath -Recurse -ErrorAction SilentlyContinue
+            # Use -Force to include hidden/system files
+            # Process directories and files separately to handle permission issues better
+            try {
+                # Get all items (files and directories) with Force flag
+                $Items = Get-ChildItem -Path $TargetPath -Force -ErrorAction SilentlyContinue
+                
+                # Sort by depth (deepest first) to avoid parent/child deletion conflicts
+                $SortedItems = $Items | Sort-Object { $_.FullName.Split('\').Count } -Descending
 
-            foreach ($Item in $Items) {
-                try {
-                    Remove-Item -Path $Item.FullName -Confirm:$false -Recurse -Force -ErrorAction Stop
+                foreach ($Item in $SortedItems) {
+                    try {
+                        if (Test-Path $Item.FullName) {
+                            # Use Remove-Item with Force to handle read-only/hidden/system attributes
+                            Remove-Item -Path $Item.FullName -Confirm:$false -Recurse -Force -ErrorAction Stop
+                        }
+                    }
+                    catch {
+                        if ($EnableVerbose) {
+                            Write-Verbose "$($Item.FullName) - $($_.Exception.Message)"
+                        }
+                        # Continue with other items even if one fails
+                    }
                 }
-                catch {
-                    Write-Verbose "$($Item.FullName) - $($_.Exception.Message)"
+
+                # Try to clean subdirectories that might have been missed
+                # This handles cases where recurse fails due to permissions
+                if (Test-Path $TargetPath) {
+                    $Subdirs = Get-ChildItem -Path $TargetPath -Directory -Force -ErrorAction SilentlyContinue
+                    foreach ($Subdir in $Subdirs) {
+                        try {
+                            # Recursively try to clean each subdirectory independently
+                            $SubItems = Get-ChildItem -Path $Subdir.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                            foreach ($SubItem in $SubItems) {
+                                try {
+                                    if (Test-Path $SubItem.FullName) {
+                                        Remove-Item -Path $SubItem.FullName -Confirm:$false -Recurse -Force -ErrorAction Stop
+                                    }
+                                }
+                                catch {
+                                    if ($EnableVerbose) {
+                                        Write-Verbose "$($SubItem.FullName) - $($_.Exception.Message)"
+                                    }
+                                }
+                            }
+                            # Try to remove the empty subdirectory
+                            if (Test-Path $Subdir.FullName) {
+                                Remove-Item -Path $Subdir.FullName -Force -ErrorAction SilentlyContinue
+                            }
+                        }
+                        catch {
+                            if ($EnableVerbose) {
+                                Write-Verbose "$($Subdir.FullName) - $($_.Exception.Message)"
+                            }
+                        }
+                    }
+                }
+            }
+            catch {
+                if ($EnableVerbose) {
+                    Write-Verbose "Error processing $TargetPath - $($_.Exception.Message)"
                 }
             }
         }
     }
 
     if ($ComputerOBJ.PSRemoting) {
-        Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock $ScriptBlock -ArgumentList $Path -Credential $ComputerOBJ.Credential
+        Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock $ScriptBlock -ArgumentList $Path, $EnableVerbose -Credential $ComputerOBJ.Credential
     }
     else {
-        & $ScriptBlock -TargetPath $Path
+        & $ScriptBlock -TargetPath $Path -EnableVerbose $EnableVerbose
     }
 }
 
@@ -406,7 +458,7 @@ Function Invoke-DiskCleanup {
     Write-CleanupMessage "Configuring Disk Cleanup utility" -Type Warning
 
     $ScriptBlock = {
-        param($Locations, $SageSet, $Base)
+        param($Locations, $SageSet, $Base, $Silent)
 
         # Set registry keys for cleanup locations
         foreach ($Location in $Locations) {
@@ -421,10 +473,31 @@ Function Invoke-DiskCleanup {
             }
         }
 
-        # Run CleanMgr
+        # Run CleanMgr with proper output suppression
         try {
-            Start-Process -FilePath CleanMgr.exe -ArgumentList "/sagerun:99" -Wait -NoNewWindow -ErrorAction Stop
-            return $true
+            if ($Silent) {
+                # Run completely hidden with no window
+                $ProcessInfo = New-Object System.Diagnostics.ProcessStartInfo
+                $ProcessInfo.FileName = "CleanMgr.exe"
+                $ProcessInfo.Arguments = "/sagerun:99"
+                $ProcessInfo.CreateNoWindow = $true
+                $ProcessInfo.UseShellExecute = $false
+                $ProcessInfo.RedirectStandardOutput = $true
+                $ProcessInfo.RedirectStandardError = $true
+                $ProcessInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+                
+                $Process = New-Object System.Diagnostics.Process
+                $Process.StartInfo = $ProcessInfo
+                $Process.Start() | Out-Null
+                $Process.WaitForExit()
+                
+                return ($Process.ExitCode -eq 0)
+            }
+            else {
+                # Normal mode with window
+                Start-Process -FilePath CleanMgr.exe -ArgumentList "/sagerun:99" -Wait -NoNewWindow -ErrorAction Stop
+                return $true
+            }
         }
         catch {
             return $false
@@ -432,10 +505,10 @@ Function Invoke-DiskCleanup {
     }
 
     if ($ComputerOBJ.PSRemoting) {
-        $Result = Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock $ScriptBlock -ArgumentList $CleanupLocations, $SageSet, $Base -Credential $ComputerOBJ.Credential
+        $Result = Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock $ScriptBlock -ArgumentList $CleanupLocations, $SageSet, $Base, $Silent -Credential $ComputerOBJ.Credential
     }
     else {
-        $Result = & $ScriptBlock -Locations $CleanupLocations -SageSet $SageSet -Base $Base
+        $Result = & $ScriptBlock -Locations $CleanupLocations -SageSet $SageSet -Base $Base -Silent $Silent
     }
 
     if ($Result) {
@@ -495,16 +568,26 @@ Function Invoke-DISM {
     }
 
     $ScriptBlock = {
-        param($UseAggressive)
+        param($UseAggressive, $Silent)
         try {
             if ($UseAggressive) {
                 # More thorough cleanup - removes superseded components
                 # This can take longer but recovers more space
-                $DISMResult = dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase 2>&1
+                if ($Silent) {
+                    $DISMResult = dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase /quiet 2>&1
+                }
+                else {
+                    $DISMResult = dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase 2>&1
+                }
             }
             else {
                 # Legacy method - just service pack cleanup
-                $DISMResult = dism.exe /online /cleanup-Image /spsuperseded 2>&1
+                if ($Silent) {
+                    $DISMResult = dism.exe /online /cleanup-Image /spsuperseded /quiet 2>&1
+                }
+                else {
+                    $DISMResult = dism.exe /online /cleanup-Image /spsuperseded 2>&1
+                }
             }
             return $DISMResult
         }
@@ -514,10 +597,10 @@ Function Invoke-DISM {
     }
 
     if ($ComputerOBJ.PSRemoting) {
-        $DISM = Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock $ScriptBlock -ArgumentList $AggressiveDISM -Credential $ComputerOBJ.Credential
+        $DISM = Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock $ScriptBlock -ArgumentList $AggressiveDISM, $Silent -Credential $ComputerOBJ.Credential
     }
     else {
-        $DISM = & $ScriptBlock -UseAggressive $AggressiveDISM
+        $DISM = & $ScriptBlock -UseAggressive $AggressiveDISM -Silent $Silent
     }
 
     if ($DISM -match 'The operation completed successfully') {
